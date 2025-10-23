@@ -1,20 +1,12 @@
 package org.example;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.io.*;
+import java.nio.file.*;
+import java.security.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
+import java.nio.charset.StandardCharsets;
 
 public class DictionaryAttack {
 
@@ -27,26 +19,21 @@ public class DictionaryAttack {
 
     public static void main(String[] args) throws Exception {
 
-        // ========== DATASET CONFIGURATION ==========
-        // Uncomment ONE of the following lines to choose dataset size:
-        
-        String datasetPath = "../datasets/small/";  // Use small dataset
-        // String datasetPath = "../datasets/large/";  // Use large dataset
-        
-        // ==========================================
+        // Check if both file paths are provided as command-line arguments
+        if (args.length < 2) {
+            System.out.println("Usage: java -jar <jar-file-name>.jar <input_file> <dictionary_file> <output_file>");
+            System.exit(1);
+        }
 
-        String dictionaryPath = datasetPath + "dictionary.txt";
-        String usersPath = datasetPath + "in.txt";
-        String passwordsPath = datasetPath + "out.txt";
+        String usersPath = args[0];
+        String dictionaryPath = args[1];
+        String passwordsPath = args[2];
 
-        // Alternative: Use command-line arguments (uncomment below and comment above)
-        // if (args.length < 3) {
-        //     System.out.println("Usage: java -jar <jar-file-name>.jar <input_file> <dictionary_file> <output_file>");
-        //     System.exit(1);
-        // }
-        // String usersPath = args[0];
-        // String dictionaryPath = args[1];
-        // String passwordsPath = args[2];
+//        String datasetPath = "/Users/kasung/Projects/se301/project/code/se301/src/datasets/large/";
+//
+//        String dictionaryPath = datasetPath + "dictionary.txt";
+//        String usersPath = datasetPath + "in.txt";
+//        String passwordsPath = datasetPath + "out.txt";
 
         long start = System.currentTimeMillis();
         List<String> allPasswords = loadDictionary(dictionaryPath);
