@@ -46,8 +46,8 @@ public class DictionaryAttack {
 
         // ========== DATASET CONFIGURATION ==========
         // Run from 'target' directory:
-        String datasetPath = "../../datasets/small/";  // Use small dataset
-        // String datasetPath = "../../datasets/large/";  // Use large dataset
+        // String datasetPath = "../../datasets/small/";  // Use small dataset
+        String datasetPath = "../../datasets/large/";  // Use large dataset
         
         // ==========================================
 
