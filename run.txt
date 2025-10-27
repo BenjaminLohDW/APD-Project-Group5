@@ -1,0 +1,12 @@
+cd to_elearn/code
+
+mvn clean package
+
+cd target 
+
+java -jar se301-1.1-SNAPSHOT-jar-with-dependencies.jar ../../datasets/small/in.txt ../../datasets/small/dictionary.txt ../../datasets/small/out.txt
+
+java -jar se301-1.1-SNAPSHOT-jar-with-dependencies.jar ../../datasets/large/in.txt ../../datasets/large/dictionary.txt ../../datasets/large/out.txt
+
+
+
