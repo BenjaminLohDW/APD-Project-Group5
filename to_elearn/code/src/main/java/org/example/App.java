@@ -69,10 +69,15 @@ public class App {
 
         // --- 5. CRACKING (Core Concurrent Cracking Engine) ---
         CrackingEngine crackingEngine = new CrackingEngine(
-                users, preHashedDictionary, passwordsFound, usersChecked, crackedQueue
+                users,
+                preHashedDictionary,
+                passwordsFound,
+                usersChecked,
+                crackedQueue,
+                reporter,
+                totalUsers   
         );
-        crackingEngine.startAttack(executor); // Implement High-Performance Concurrency
-
+        crackingEngine.startAttack(executor);
         // --- 6. SHUTDOWN AND FINAL REPORTING ---
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.HOURS);

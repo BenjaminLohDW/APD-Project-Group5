@@ -3,13 +3,14 @@ package org.example.core;
 
 import org.example.model.CrackedCredential;
 import org.example.model.User;
+import org.example.report.StatusReporter; 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// The Core Concurrent Cracking Engine [cite: 40]
+// The Core Concurrent Cracking Engine
 public class CrackingEngine {
 
     private final Map<String, User> users;
@@ -17,22 +18,30 @@ public class CrackingEngine {
     private final AtomicInteger passwordsFound;
     private final AtomicInteger usersChecked;
     private final ConcurrentLinkedQueue<CrackedCredential> crackedQueue;
+    private final StatusReporter reporter; 
+    private final long totalUsers;  
 
     public CrackingEngine(
-            Map<String, User> users, 
+            Map<String, User> users,
             ConcurrentHashMap<String, String> preHashedDictionary,
             AtomicInteger passwordsFound,
             AtomicInteger usersChecked,
-            ConcurrentLinkedQueue<CrackedCredential> crackedQueue) {
+            ConcurrentLinkedQueue<CrackedCredential> crackedQueue,
+            StatusReporter reporter, 
+            long totalUsers) {       
         this.users = users;
         this.preHashedDictionary = preHashedDictionary;
         this.passwordsFound = passwordsFound;
         this.usersChecked = usersChecked;
         this.crackedQueue = crackedQueue;
+        this.reporter = reporter;
+        this.totalUsers = totalUsers; 
     }
 
-    // Handles the fixed O(U) complexity lookup (High-Performance Concurrency [cite: 45])
+    // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
     public void startAttack(ExecutorService executor) {
+        final int BATCH_SIZE = 1000; // Define the desired batch size
+
         for (User user : users.values()) {
             executor.submit(() -> {
                 try {
@@ -40,9 +49,8 @@ public class CrackingEngine {
                     String crackedPassword = preHashedDictionary.get(user.hashedPassword());
 
                     if (crackedPassword != null) {
-                        // Use AtomicBoolean compareAndSet for lock-free, thread-safe update 
-                        // (Eliminate Race Conditions [cite: 48, 49])
-                        if (user.isCracked().compareAndSet(false, true)) { 
+                        // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
+                        if (user.isCracked().compareAndSet(false, true)) {
                             crackedQueue.add(new CrackedCredential(
                                 user.username(), user.hashedPassword(), crackedPassword
                             ));
@@ -50,7 +58,14 @@ public class CrackingEngine {
                         }
                     }
                 } finally {
-                    usersChecked.incrementAndGet();
+                    int done = usersChecked.incrementAndGet();
+
+                    // NEW BATCH REPORTING LOGIC:
+                    // If the number of checked users is a multiple of the batch size,
+                    // or if it's the very last task, manually trigger a report.
+                    if (done % BATCH_SIZE == 0 || done == totalUsers) {
+                        reporter.reportNow();
+                    }
                 }
             });
         }
