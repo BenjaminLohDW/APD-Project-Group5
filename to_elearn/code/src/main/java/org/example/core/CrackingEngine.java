@@ -39,35 +39,32 @@ public class CrackingEngine {
     }
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
-    public void startAttack(ExecutorService executor) {
+    public void startAttack() {
         final int BATCH_SIZE = 1000; // Define the desired batch size
 
-        for (User user : users.values()) {
-            executor.submit(() -> {
-                try {
-                    // O(1) Lookup: Efficient lookup replaces the nested loop.
-                    String crackedPassword = preHashedDictionary.get(user.hashedPassword());
+        users.values().parallelStream().forEach(user -> {
+            try {
+                // O(1) Lookup: Efficient lookup replaces the nested loop.
+                String crackedPassword = preHashedDictionary.get(user.hashedPassword());
 
-                    if (crackedPassword != null) {
-                        // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
-                        if (user.isCracked().compareAndSet(false, true)) {
-                            crackedQueue.add(new CrackedCredential(
-                                user.username(), user.hashedPassword(), crackedPassword
-                            ));
-                            passwordsFound.incrementAndGet();
-                        }
-                    }
-                } finally {
-                    int done = usersChecked.incrementAndGet();
-
-                    // NEW BATCH REPORTING LOGIC:
-                    // If the number of checked users is a multiple of the batch size,
-                    // or if it's the very last task, manually trigger a report.
-                    if (done % BATCH_SIZE == 0 || done == totalUsers) {
-                        reporter.reportNow();
+                if (crackedPassword != null) {
+                    // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
+                    if (user.isCracked().compareAndSet(false, true)) { 
+                        crackedQueue.add(new CrackedCredential(
+                            user.username(), user.hashedPassword(), crackedPassword
+                        ));
+                        passwordsFound.incrementAndGet();
                     }
                 }
-            });
-        }
+            } finally {
+                int done = usersChecked.incrementAndGet();
+                
+                // Keep the batch reporting logic
+                if (done % BATCH_SIZE == 0 || done == totalUsers) {
+                    reporter.reportNow();
+                }
+            }
+        });
+        
     }
 }

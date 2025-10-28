@@ -27,7 +27,7 @@ public class StatusReporter {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String timestamp = LocalDateTime.now().format(formatter);
         // Use the required format and non-blocking print
-        System.out.printf("\r[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d",
+        System.out.printf("\r [%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d \n",
                 timestamp, percent, passwordsFound.get(), remaining);
     }
 

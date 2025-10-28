@@ -8,16 +8,16 @@ import org.example.io.OutputWriter;
 import org.example.model.CrackedCredential;
 import org.example.model.User;
 import org.example.report.StatusReporter;
+import org.example.util.Hasher;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
 
 public class App {
 
@@ -28,6 +28,9 @@ public class App {
     static ConcurrentLinkedQueue<CrackedCredential> crackedQueue = new ConcurrentLinkedQueue<>();
 
     public static void main(String[] args) throws Exception {
+
+        // -- warmup ---
+        Hasher.warmup();
 
         // --- 1. CONFIGURATION AND INITIALIZATION ---
         // Use command-line arguments as per instruction
@@ -41,9 +44,6 @@ public class App {
 
         long startTime = System.currentTimeMillis();
 
-        int threadCount = Runtime.getRuntime().availableProcessors();
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
         // --- 2. DATA LOADING (Target Hash Loading/Management Component) ---
         HashManager hashManager = new HashManager();
         Map<String, User> users = hashManager.loadUsers(usersPath);
@@ -51,17 +51,14 @@ public class App {
         DictionaryProcessor dictionaryProcessor = new DictionaryProcessor(hashesComputed);
         List<String> dictionaryWords = dictionaryProcessor.loadDictionary(dictionaryPath);
 
-        // --- 3. ALGORITHMIC FIX: PRE-HASHING (O(N*M) lookup replaced) ---
-        // Fix the Lookup Algorithm
+        // --- 3. PRE-HASHING  ---
         ConcurrentHashMap<String, String> preHashedDictionary = 
-                dictionaryProcessor.preHashDictionary(dictionaryWords, executor);
+                dictionaryProcessor.preHashDictionary(dictionaryWords);
 
         System.out.println("\nPre-hashing complete. Total unique dictionary hashes: " + preHashedDictionary.size());
 
-        // Executor must be re-created for the Cracking phase since it was shut down in preHashDictionary
-        executor = Executors.newFixedThreadPool(threadCount);
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-
+        
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
         StatusReporter reporter = new StatusReporter(totalUsers, passwordsFound, usersChecked);
@@ -77,10 +74,7 @@ public class App {
                 reporter,
                 totalUsers   
         );
-        crackingEngine.startAttack(executor);
-        // --- 6. SHUTDOWN AND FINAL REPORTING ---
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.HOURS);
+        crackingEngine.startAttack();
 
         scheduler.shutdownNow();
         System.out.println("\n\nAttack complete.");

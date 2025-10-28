@@ -8,8 +8,6 @@ import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DictionaryProcessor {
@@ -27,29 +25,24 @@ public class DictionaryProcessor {
 
     // Handles the fixed O(D) complexity pre-hashing (The algorithmic fix [cite: 42, 43])
     public ConcurrentHashMap<String, String> preHashDictionary(
-            List<String> dictionaryWords, 
-            ExecutorService executor) throws InterruptedException {
+            List<String> dictionaryWords) {
 
         ConcurrentHashMap<String, String> preHashedDictionary = new ConcurrentHashMap<>();
         
         System.out.println("Starting parallel pre-hashing...");
         
-        for (String word : dictionaryWords) {
-            executor.submit(() -> {
-                try {
-                    String hash = Hasher.sha256(word);
-                    // Hash -> Plaintext mapping.
-                    preHashedDictionary.putIfAbsent(hash, word);
-                    hashesComputed.incrementAndGet();
-                } catch (NoSuchAlgorithmException ignored) {
-                }
-            });
-        }
-        
-        // Wait for all pre-hashing tasks to complete before proceeding to the attack phase
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.HOURS);
-        
+        dictionaryWords.parallelStream().forEach(word -> {
+            try {
+                String hash = Hasher.sha256(word);
+                // Hash -> Plaintext mapping. putIfAbsent is thread-safe.
+                preHashedDictionary.putIfAbsent(hash, word);
+                // Use the shared counter
+                hashesComputed.incrementAndGet();
+            } catch (NoSuchAlgorithmException ignored) {
+                // Ignore is acceptable here for a missing standard algorithm
+            }
+        });
+
         return preHashedDictionary;
     }
 }
