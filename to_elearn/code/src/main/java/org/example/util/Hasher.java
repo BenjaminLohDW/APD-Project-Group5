@@ -26,7 +26,7 @@ private static final String WARMUP_STRING = "password123";
         }
 
         long endTime = System.nanoTime();
-        System.out.printf("Warmup complete in %.2f ms. Ready for peak performance.\n", 
+        System.out.printf("Warmup complete in %.2f ms.\n", 
                         (endTime - startTime) / 1_000_000.0);
     }
 

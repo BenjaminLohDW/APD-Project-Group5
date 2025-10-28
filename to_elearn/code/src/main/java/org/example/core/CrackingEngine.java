@@ -7,7 +7,6 @@ import org.example.report.StatusReporter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // The Core Concurrent Cracking Engine
@@ -40,7 +39,7 @@ public class CrackingEngine {
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
     public void startAttack() {
-        final int BATCH_SIZE = 1000; // Define the desired batch size
+        final int BATCH_SIZE = 1000; 
 
         users.values().parallelStream().forEach(user -> {
             try {

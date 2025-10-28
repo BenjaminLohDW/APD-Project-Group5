@@ -12,10 +12,10 @@ import org.example.util.Hasher;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -26,6 +26,11 @@ public class App {
     static AtomicInteger hashesComputed = new AtomicInteger(0);
     static AtomicInteger usersChecked = new AtomicInteger(0);
     static ConcurrentLinkedQueue<CrackedCredential> crackedQueue = new ConcurrentLinkedQueue<>();
+
+    private static final int THREAD_COUNT = Math.max(
+        8 , 
+        (int) (Runtime.getRuntime().availableProcessors() * 1.25)
+    );
 
     public static void main(String[] args) throws Exception {
 
@@ -51,19 +56,22 @@ public class App {
         DictionaryProcessor dictionaryProcessor = new DictionaryProcessor(hashesComputed);
         List<String> dictionaryWords = dictionaryProcessor.loadDictionary(dictionaryPath);
 
+        System.out.println("Using custom ForkJoinPool with " + THREAD_COUNT + " threads.");
+        ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT);
+
+        ConcurrentHashMap<String, String> preHashedDictionary;
         // --- 3. PRE-HASHING  ---
-        ConcurrentHashMap<String, String> preHashedDictionary = 
-                dictionaryProcessor.preHashDictionary(dictionaryWords);
+        Callable<ConcurrentHashMap<String, String>> preHashTask = 
+            () -> dictionaryProcessor.preHashDictionary(dictionaryWords);
+                    
+        // .get() blocks until the hashing is complete
+        preHashedDictionary = customPool.submit(preHashTask).get();
 
-        System.out.println("\nPre-hashing complete. Total unique dictionary hashes: " + preHashedDictionary.size());
-
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        
+                
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
         StatusReporter reporter = new StatusReporter(totalUsers, passwordsFound, usersChecked);
-        reporter.start(scheduler); // Live status reporter runs in a separate thread
-
+        
         // --- 5. CRACKING (Core Concurrent Cracking Engine) ---
         CrackingEngine crackingEngine = new CrackingEngine(
                 users,
@@ -74,9 +82,9 @@ public class App {
                 reporter,
                 totalUsers   
         );
-        crackingEngine.startAttack();
+        customPool.submit(() -> crackingEngine.startAttack()).get();
+        customPool.shutdownNow();
 
-        scheduler.shutdownNow();
         System.out.println("\n\nAttack complete.");
         System.out.println("Total passwords found: " + passwordsFound.get());
         System.out.println("Total dictionary hashes computed: " + hashesComputed.get());

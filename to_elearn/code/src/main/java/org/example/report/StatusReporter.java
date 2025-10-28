@@ -3,8 +3,6 @@ package org.example.report;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Implements a Live Status Reporter that runs in a separate thread
@@ -29,12 +27,6 @@ public class StatusReporter {
         // Use the required format and non-blocking print
         System.out.printf("\r [%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d \n",
                 timestamp, percent, passwordsFound.get(), remaining);
-    }
-
-    public void start(ScheduledExecutorService scheduler) {
-        Runnable reporterTask = this::doReport;
-        // Schedule to run periodically (e.g., every 1 second)
-        scheduler.scheduleAtFixedRate(reporterTask, 1, 1, TimeUnit.SECONDS);
     }
 
     /**
