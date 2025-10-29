@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class OutputWriter {
     public static void writeCrackedPasswordsToCSV(String filePath, ConcurrentLinkedQueue<CrackedCredential> crackedQueue) {
+        // Safe and tidy resource handling using try-with-resources [cite: 55]
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
             writer.write("user_name,hashed_password,plain_password\n");
 

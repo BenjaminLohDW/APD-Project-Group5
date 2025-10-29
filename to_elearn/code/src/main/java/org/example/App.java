@@ -17,16 +17,6 @@ import org.example.io.OutputWriter;
 import org.example.model.CrackedCredential;
 import org.example.model.User;
 import org.example.report.StatusReporter;
-import org.example.util.Hasher;
-
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicInteger;
-
 
 public class App {
 
@@ -36,15 +26,7 @@ public class App {
     static AtomicInteger usersChecked = new AtomicInteger(0);
     static ConcurrentLinkedQueue<CrackedCredential> crackedQueue = new ConcurrentLinkedQueue<>();
 
-    private static final int THREAD_COUNT = Math.max(
-        8 , 
-        (int) (Runtime.getRuntime().availableProcessors() * 1.25)
-    );
-
     public static void main(String[] args) throws Exception {
-
-        // -- warmup ---
-        Hasher.warmup();
 
         // --- 1. CONFIGURATION AND INITIALIZATION ---
         // Use command-line arguments as per instruction
@@ -58,6 +40,9 @@ public class App {
 
         long startTime = System.currentTimeMillis();
 
+        int threadCount = Runtime.getRuntime().availableProcessors();
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
         // --- 2. DATA LOADING (Target Hash Loading/Management Component) ---
         HashManager hashManager = new HashManager();
         Map<String, User> users = hashManager.loadUsers(usersPath);
@@ -65,18 +50,17 @@ public class App {
         DictionaryProcessor dictionaryProcessor = new DictionaryProcessor(hashesComputed);
         List<String> dictionaryWords = dictionaryProcessor.loadDictionary(dictionaryPath);
 
-        System.out.println("Using custom ForkJoinPool with " + THREAD_COUNT + " threads.");
-        ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT);
+        // --- 3. ALGORITHMIC FIX: PRE-HASHING (O(N*M) lookup replaced) ---
+        // Fix the Lookup Algorithm
+        ConcurrentHashMap<String, String> preHashedDictionary = 
+                dictionaryProcessor.preHashDictionary(dictionaryWords, executor);
 
-        ConcurrentHashMap<String, String> preHashedDictionary;
-        // --- 3. PRE-HASHING  ---
-        Callable<ConcurrentHashMap<String, String>> preHashTask = 
-            () -> dictionaryProcessor.preHashDictionary(dictionaryWords);
-                    
-        // .get() blocks until the hashing is complete
-        preHashedDictionary = customPool.submit(preHashTask).get();
+        System.out.println("\nPre-hashing complete. Total unique dictionary hashes: " + preHashedDictionary.size());
 
-                
+        // Executor must be re-created for the Cracking phase since it was shut down in preHashDictionary
+        executor = Executors.newFixedThreadPool(threadCount);
+        // ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
         StatusReporter reporter = new StatusReporter(totalUsers, passwordsFound, usersChecked);
@@ -92,9 +76,12 @@ public class App {
                 reporter,
                 totalUsers   
         );
-        customPool.submit(() -> crackingEngine.startAttack()).get();
-        customPool.shutdownNow();
+        crackingEngine.startAttack(executor);
+        // --- 6. SHUTDOWN AND FINAL REPORTING ---
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.HOURS);
 
+        // scheduler.shutdownNow();
         System.out.println("\n\nAttack complete.");
         System.out.println("Total passwords found: " + passwordsFound.get());
         System.out.println("Total dictionary hashes computed: " + hashesComputed.get());

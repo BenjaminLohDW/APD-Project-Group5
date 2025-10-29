@@ -4,6 +4,7 @@ package org.example.core;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.example.model.CrackedCredential;
@@ -39,33 +40,29 @@ public class CrackingEngine {
     }
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
-    public void startAttack() {
-        final int BATCH_SIZE = 1000; 
+    public void startAttack(ExecutorService executor) {
+        for (User user : users.values()) {
+            executor.submit(() -> {
+                try {
+                    // O(1) Lookup: Efficient lookup replaces the nested loop.
+                    String crackedPassword = preHashedDictionary.get(user.hashedPassword());
 
-        users.values().parallelStream().forEach(user -> {
-            try {
-                // O(1) Lookup: Efficient lookup replaces the nested loop.
-                String crackedPassword = preHashedDictionary.get(user.hashedPassword());
-
-                if (crackedPassword != null) {
-                    // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
-                    if (user.isCracked().compareAndSet(false, true)) { 
-                        crackedQueue.add(new CrackedCredential(
-                            user.username(), user.hashedPassword(), crackedPassword
-                        ));
-                        passwordsFound.incrementAndGet();
+                    if (crackedPassword != null) {
+                        // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
+                        if (user.isCracked().compareAndSet(false, true)) {
+                            crackedQueue.add(new CrackedCredential(
+                                user.username(), user.hashedPassword(), crackedPassword
+                            ));
+                            passwordsFound.incrementAndGet();
+                        }
                     }
+                } finally {
+                    // Increment counter and check if we should report
+                    usersChecked.incrementAndGet();
+                    reporter.checkAndReport();
                 }
-            } finally {
-                int done = usersChecked.incrementAndGet();
-                
-                // Keep the batch reporting logic
-                if (done % BATCH_SIZE == 0 || done == totalUsers) {
-                    reporter.reportNow();
-                }
-            }
-        });
-        
+            });
+        }
     }
 }
 
