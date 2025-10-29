@@ -1,15 +1,6 @@
 // --- File: App.java ---
 package org.example; // <-- Adjusted to org.example
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import org.example.core.CrackingEngine;
 import org.example.core.DictionaryProcessor;
 import org.example.io.HashManager;
@@ -17,6 +8,16 @@ import org.example.io.OutputWriter;
 import org.example.model.CrackedCredential;
 import org.example.model.User;
 import org.example.report.StatusReporter;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class App {
 
@@ -59,12 +60,12 @@ public class App {
 
         // Executor must be re-created for the Cracking phase since it was shut down in preHashDictionary
         executor = Executors.newFixedThreadPool(threadCount);
-        // ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
         StatusReporter reporter = new StatusReporter(totalUsers, passwordsFound, usersChecked);
-        // reporter.start(scheduler); // Live status reporter runs in a separate thread
+        reporter.start(scheduler); // Live status reporter runs in a separate thread
 
         // --- 5. CRACKING (Core Concurrent Cracking Engine) ---
         CrackingEngine crackingEngine = new CrackingEngine(
@@ -81,7 +82,7 @@ public class App {
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.HOURS);
 
-        // scheduler.shutdownNow();
+        scheduler.shutdownNow();
         System.out.println("\n\nAttack complete.");
         System.out.println("Total passwords found: " + passwordsFound.get());
         System.out.println("Total dictionary hashes computed: " + hashesComputed.get());

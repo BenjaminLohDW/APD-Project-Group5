@@ -1,15 +1,14 @@
 // File: src/main/java/org/example/core/CrackingEngine.java
 package org.example.core;
 
+import org.example.model.CrackedCredential;
+import org.example.model.User;
+import org.example.report.StatusReporter; 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.example.model.CrackedCredential;
-import org.example.model.User;
-import org.example.report.StatusReporter;
 
 // The Core Concurrent Cracking Engine
 public class CrackingEngine {
@@ -41,6 +40,8 @@ public class CrackingEngine {
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
     public void startAttack(ExecutorService executor) {
+        final int BATCH_SIZE = 1000; // Define the desired batch size
+
         for (User user : users.values()) {
             executor.submit(() -> {
                 try {
@@ -57,12 +58,16 @@ public class CrackingEngine {
                         }
                     }
                 } finally {
-                    // Increment counter and check if we should report
-                    usersChecked.incrementAndGet();
-                    reporter.checkAndReport();
+                    int done = usersChecked.incrementAndGet();
+
+                    // NEW BATCH REPORTING LOGIC:
+                    // If the number of checked users is a multiple of the batch size,
+                    // or if it's the very last task, manually trigger a report.
+                    if (done % BATCH_SIZE == 0 || done == totalUsers) {
+                        reporter.reportNow();
+                    }
                 }
             });
         }
     }
 }
-
