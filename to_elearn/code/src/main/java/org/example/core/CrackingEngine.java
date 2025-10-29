@@ -7,7 +7,6 @@ import org.example.report.StatusReporter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // The Core Concurrent Cracking Engine
@@ -39,6 +38,7 @@ public class CrackingEngine {
     }
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
+<<<<<<< HEAD
     public void startAttack(ExecutorService executor) {
         final int BATCH_SIZE = 1000; // Define the desired batch size
 
@@ -47,16 +47,25 @@ public class CrackingEngine {
                 try {
                     // O(1) Lookup: Efficient lookup replaces the nested loop.
                     String crackedPassword = preHashedDictionary.get(user.hashedPassword());
+=======
+    public void startAttack() {
+        final int BATCH_SIZE = 1000; 
+>>>>>>> parent of 5b86202 (Revert "Merge branch 'test' of https://github.com/BenjaminLohDW/APD-Project-Group5 into test")
 
-                    if (crackedPassword != null) {
-                        // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
-                        if (user.isCracked().compareAndSet(false, true)) {
-                            crackedQueue.add(new CrackedCredential(
-                                user.username(), user.hashedPassword(), crackedPassword
-                            ));
-                            passwordsFound.incrementAndGet();
-                        }
+        users.values().parallelStream().forEach(user -> {
+            try {
+                // O(1) Lookup: Efficient lookup replaces the nested loop.
+                String crackedPassword = preHashedDictionary.get(user.hashedPassword());
+
+                if (crackedPassword != null) {
+                    // Use AtomicBoolean compareAndSet for lock-free, thread-safe update
+                    if (user.isCracked().compareAndSet(false, true)) { 
+                        crackedQueue.add(new CrackedCredential(
+                            user.username(), user.hashedPassword(), crackedPassword
+                        ));
+                        passwordsFound.incrementAndGet();
                     }
+<<<<<<< HEAD
                 } finally {
                     int done = usersChecked.incrementAndGet();
 
@@ -66,8 +75,18 @@ public class CrackingEngine {
                     if (done % BATCH_SIZE == 0 || done == totalUsers) {
                         reporter.reportNow();
                     }
+=======
+>>>>>>> parent of 5b86202 (Revert "Merge branch 'test' of https://github.com/BenjaminLohDW/APD-Project-Group5 into test")
                 }
-            });
-        }
+            } finally {
+                int done = usersChecked.incrementAndGet();
+                
+                // Keep the batch reporting logic
+                if (done % BATCH_SIZE == 0 || done == totalUsers) {
+                    reporter.reportNow();
+                }
+            }
+        });
+        
     }
 }
