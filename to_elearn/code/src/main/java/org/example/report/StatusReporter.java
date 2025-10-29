@@ -3,44 +3,64 @@ package org.example.report;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Implements a Live Status Reporter that runs in a separate thread
 public class StatusReporter {
 
     private final long totalTasks;
     private final AtomicInteger passwordsFound;
     private final AtomicInteger usersChecked;
+    private final int reportInterval;
+    private final DateTimeFormatter formatter;
+    private long lastReportedMilestone = 0; // Regular long, protected by synchronized
 
     public StatusReporter(long totalTasks, AtomicInteger passwordsFound, AtomicInteger usersChecked) {
+        this(totalTasks, passwordsFound, usersChecked, 1000);
+    }
+
+    public StatusReporter(long totalTasks, AtomicInteger passwordsFound, AtomicInteger usersChecked, int reportInterval) {
         this.totalTasks = totalTasks;
         this.passwordsFound = passwordsFound;
         this.usersChecked = usersChecked;
+        this.reportInterval = reportInterval;
+        this.formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     }
 
-    // Extracted the printing logic into a reusable method
-    private void doReport() {
-        long remaining = totalTasks - usersChecked.get();
-        double percent = totalTasks == 0 ? 100.0 : (double) usersChecked.get() / totalTasks * 100.0;
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    public void checkAndReport() {
+        long currentCount = usersChecked.get();
+        long currentMilestone = (currentCount / reportInterval) * reportInterval;
+        
+        // Synchronized to ensure only one thread reports per milestone
+        synchronized (this) {
+            if (currentMilestone > lastReportedMilestone && currentMilestone > 0) {
+                lastReportedMilestone = currentMilestone;
+                doReport(currentMilestone);
+            }
+            
+            // Special case: final report
+            if (currentCount == totalTasks && lastReportedMilestone < totalTasks) {
+                lastReportedMilestone = totalTasks;
+                doReport(totalTasks);
+            }
+        }
+    }
+
+    private void doReport(long milestone) {
+        long remaining = totalTasks - milestone;
+        double percent = totalTasks == 0 ? 100.0 : (double) milestone / totalTasks * 100.0;
         String timestamp = LocalDateTime.now().format(formatter);
-        // Use the required format and non-blocking print
-        System.out.printf("\r[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d\n",
+        
+        System.out.printf("[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d%n",
                 timestamp, percent, passwordsFound.get(), remaining);
     }
 
-    public void start(ScheduledExecutorService scheduler) {
-        Runnable reporterTask = this::doReport;
-        // Schedule to run periodically (e.g., every 1 second)
-        scheduler.scheduleAtFixedRate(reporterTask, 1, 1, TimeUnit.SECONDS);
-    }
-
-    /**
-     * Public method to manually trigger a status update (used by CrackingEngine).
-     */
-    public void reportNow() {
-        doReport();
+    public void reportFinal() {
+        synchronized (this) {
+            long currentCount = usersChecked.get();
+            if (currentCount > lastReportedMilestone) {
+                lastReportedMilestone = currentCount;
+                doReport(currentCount);
+            }
+        }
     }
 }
