@@ -5,16 +5,15 @@ import org.example.util.Hasher;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 public class DictionaryProcessor {
 
-    private final AtomicInteger hashesComputed;
+    private final LongAdder hashesComputed;
 
-    public DictionaryProcessor(AtomicInteger hashesComputed) {
+    public DictionaryProcessor(LongAdder hashesComputed) {
         this.hashesComputed = hashesComputed;
     }
 
@@ -32,15 +31,11 @@ public class DictionaryProcessor {
         System.out.println("Starting parallel pre-hashing...");
         
         dictionaryWords.parallelStream().forEach(word -> {
-            try {
-                String hash = Hasher.sha256(word);
-                // Hash -> Plaintext mapping. putIfAbsent is thread-safe.
-                preHashedDictionary.putIfAbsent(hash, word);
-                // Use the shared counter
-                hashesComputed.incrementAndGet();
-            } catch (NoSuchAlgorithmException ignored) {
-                // Ignore is acceptable here for a missing standard algorithm
-            }
+            String hash = Hasher.sha256(word);
+            // Hash -> Plaintext mapping. putIfAbsent is thread-safe.
+            preHashedDictionary.putIfAbsent(hash, word);
+            // Use the shared counter
+            hashesComputed.increment();
         });
 
         return preHashedDictionary;

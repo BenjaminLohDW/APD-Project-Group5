@@ -4,41 +4,25 @@ package org.example.util;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+
 
 public class Hasher {
-    private static final int WARMUP_ITERATIONS = 50000;
-private static final String WARMUP_STRING = "password123";
-
-    public static void warmup() {
-        System.out.println("Starting JIT Warmup phase...");
-        long startTime = System.nanoTime();
-        
+    private static final ThreadLocal<MessageDigest> DIGEST = ThreadLocal.withInitial(() -> {
         try {
-            for (int i = 0; i < WARMUP_ITERATIONS; i++) {
-                // Execute the code we want the JIT to optimize: Hasher.sha256()
-                // The result is ignored to prevent the JVM from optimizing the call away entirely.
-                // Using a constant string ensures the compilation is relevant.
-                sha256(WARMUP_STRING); 
-            }
-        } catch (Exception e) {
-            // Handle potential NoSuchAlgorithmException (though unlikely for SHA-256)
-            System.err.println("Warmup failed: " + e.getMessage());
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed to exist on every Java platform; rethrow as unchecked if not.
+            throw new RuntimeException(e);
         }
+    });
 
-        long endTime = System.nanoTime();
-        System.out.printf("Warmup complete in %.2f ms.\n", 
-                        (endTime - startTime) / 1_000_000.0);
-    }
-
-    public static String sha256(String input) throws NoSuchAlgorithmException {
-        // Standard Java hashing implementation
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    public static String sha256(String input) {
+        MessageDigest digest = DIGEST.get();
+        digest.reset();
         byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-        
-        StringBuilder hex = new StringBuilder();
-        for (byte b : hash) {
-            hex.append(String.format("%02x", b));
-        }
-        return hex.toString();
+
+        // Use Java's HexFormat for fast byte[] -> hex conversion
+        return HexFormat.of().formatHex(hash);
     }
 }
