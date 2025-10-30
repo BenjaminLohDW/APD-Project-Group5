@@ -30,7 +30,7 @@ public class App {
 
     private static final int THREAD_COUNT = Math.max(
         8 , 
-        (int) (Runtime.getRuntime().availableProcessors() )
+        (int) (Runtime.getRuntime().availableProcessors() * 0.6)
     );
 
     public static void main(String[] args) throws Exception {
@@ -48,7 +48,7 @@ public class App {
         long startTime = System.currentTimeMillis();
 
         // --- 2. DATA LOADING (Target Hash Loading/Management Component) ---
-  
+        long startTime2 = System.currentTimeMillis();
 
         HashManager hashManager = new HashManager();
         Map<String, User> users = hashManager.loadUsers(usersPath);
@@ -60,9 +60,10 @@ public class App {
         ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT);
 
         ConcurrentHashMap<String, String> preHashedDictionary;
+        System.out.println("time loading data (milliseconds): " + (System.currentTimeMillis() - startTime2));
 
         // --- 3. PRE-HASHING  ---
-
+        
         long startTime3 = System.currentTimeMillis();
 
         Callable<ConcurrentHashMap<String, String>> preHashTask = 

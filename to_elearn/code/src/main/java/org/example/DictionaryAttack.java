@@ -7,12 +7,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import org.example.util.Hasher;
- 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
- 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // cd to_elearn/code/target
@@ -71,8 +72,30 @@ public class DictionaryAttack {
         long totalTasks = totalUsers;
         System.out.println("\nStarting attack (lookup) on " + totalUsers + " users using parallel streams...");
 
-        // Status reporter (prints every 1000 completed users)
-        org.example.report.StatusReporter reporter = new org.example.report.StatusReporter(totalTasks, passwordsFound, usersChecked, 1000);
+        // Periodic progress reporter
+        Runnable reporter = () -> {
+            long checked = usersChecked.get();
+            long remaining = Math.max(0, totalTasks - checked);
+            double percent = totalTasks == 0 ? 100.0 : (double) checked / totalTasks * 100.0;
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String timestamp = LocalDateTime.now().format(formatter);
+            System.out.printf("\r[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d",
+                    timestamp, percent, passwordsFound.get(), remaining);
+        };
+
+        // Start a simple background reporter thread
+        Thread reporterThread = new Thread(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted() && usersChecked.get() < totalTasks) {
+                    reporter.run();
+                    TimeUnit.SECONDS.sleep(1);
+                }
+            } catch (InterruptedException ignored) {
+                // exit
+            }
+        }, "status-reporter");
+        reporterThread.setDaemon(true);
+        reporterThread.start();
 
         // Perform lookups in parallel using the common ForkJoinPool
         users.values().parallelStream().forEach(user -> {
@@ -90,13 +113,12 @@ public class DictionaryAttack {
                 }
             } finally {
                 usersChecked.incrementAndGet();
-                // Let the StatusReporter decide whether to print a milestone (every 1000 tasks)
-                reporter.checkAndReport();
             }
         });
 
-    // Final report
-    reporter.reportNow();
+        // stop reporter and show final progress
+        reporterThread.interrupt();
+        reporter.run();
         System.out.println("");
         System.out.println("");
         System.out.println("Total passwords found: " + passwordsFound.get());
