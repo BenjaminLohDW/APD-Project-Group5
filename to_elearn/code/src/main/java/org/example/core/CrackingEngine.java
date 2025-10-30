@@ -2,7 +2,7 @@
 package org.example.core;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+// ConcurrentHashMap import removed as CrackingEngine accepts a generic Map for the pre-hash lookup
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -14,7 +14,7 @@ import org.example.report.StatusReporter;
 public class CrackingEngine {
 
     private final Map<String, User> users;
-    private final ConcurrentHashMap<String, String> preHashedDictionary;
+    private final Map<String, String> preHashedDictionary;
     private final AtomicInteger passwordsFound;
     private final AtomicInteger usersChecked;
     private final ConcurrentLinkedQueue<CrackedCredential> crackedQueue;
@@ -23,7 +23,7 @@ public class CrackingEngine {
 
     public CrackingEngine(
             Map<String, User> users,
-            ConcurrentHashMap<String, String> preHashedDictionary,
+            Map<String, String> preHashedDictionary,
             AtomicInteger passwordsFound,
             AtomicInteger usersChecked,
             ConcurrentLinkedQueue<CrackedCredential> crackedQueue,

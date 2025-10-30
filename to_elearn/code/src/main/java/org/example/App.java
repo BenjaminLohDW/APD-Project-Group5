@@ -1,5 +1,5 @@
 // --- File: App.java ---
-package org.example; // <-- Adjusted to org.example
+package org.example; 
 
 import org.example.core.CrackingEngine;
 import org.example.core.DictionaryProcessor;
@@ -12,6 +12,9 @@ import org.example.report.StatusReporter;
 
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -59,18 +62,20 @@ public class App {
         System.out.println("Using custom ForkJoinPool with " + THREAD_COUNT + " threads.");
         ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT);
 
-        ConcurrentHashMap<String, String> preHashedDictionary;
+        Map<String, String> preHashedDictionary;
 
-        // --- 3. PRE-HASHING  ---
-
-        long startTime3 = System.currentTimeMillis();
-
-        Callable<ConcurrentHashMap<String, String>> preHashTask = 
-            () -> dictionaryProcessor.preHashDictionary(dictionaryWords);
-                    
-        // .get() blocks until the hashing is complete
-        preHashedDictionary = customPool.submit(preHashTask).get();
-        System.out.println("time pre-hashing dictionary (milliseconds): " + (System.currentTimeMillis() - startTime3));
+        // --- 3. PRE-HASHING / CACHE ---
+        Path prehashPath = Paths.get(dictionaryPath + ".prehash");
+        if (Files.exists(prehashPath)) {
+            System.out.println("Found prehash cache at " + prehashPath + ", loading...");
+            org.example.cache.PrehashCache cache = org.example.cache.PrehashCache.load(prehashPath);
+            preHashedDictionary = new org.example.cache.PrehashMapView(cache);
+        } else {
+            Callable<ConcurrentHashMap<String, String>> preHashTask = 
+                () -> dictionaryProcessor.preHashDictionary(dictionaryWords);
+            // .get() blocks until the hashing is complete
+            preHashedDictionary = customPool.submit(preHashTask).get();
+        }
                 
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
@@ -78,21 +83,21 @@ public class App {
         
 
         // --- 5. CRACKING (Core Concurrent Cracking Engine) ---
-        CrackingEngine crackingEngine = new CrackingEngine(
-                users,
-                preHashedDictionary,
-                passwordsFound,
-                usersChecked,
-                crackedQueue,
-                reporter,
-                totalUsers   
-        );
+    CrackingEngine crackingEngine = new CrackingEngine(
+        users,
+        preHashedDictionary,
+        passwordsFound,
+        usersChecked,
+        crackedQueue,
+        reporter,
+        totalUsers   
+    );
         customPool.submit(() -> crackingEngine.startAttack()).get();
         customPool.shutdownNow();
 
-        System.out.println("\n\nAttack complete.");
-        System.out.println("Total passwords found: " + passwordsFound.get());
-    System.out.println("Total dictionary hashes computed: " + hashesComputed.sum());
+    //     System.out.println("\n\nAttack complete.");
+    //     System.out.println("Total passwords found: " + passwordsFound.get());
+    // System.out.println("Total dictionary hashes computed: " + hashesComputed.sum());
         System.out.println("Total time spent (milliseconds): " + (System.currentTimeMillis() - startTime));
 
         if (passwordsFound.get() > 0) {
