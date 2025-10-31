@@ -1,13 +1,14 @@
 // File: src/main/java/org/example/core/CrackingEngine.java
 package org.example.core;
 
-import org.example.model.CrackedCredential;
-import org.example.model.User;
-import org.example.report.StatusReporter; 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.example.model.CrackedCredential;
+import org.example.model.User;
+import org.example.report.StatusReporter;
 
 // The Core Concurrent Cracking Engine
 public class CrackingEngine {
@@ -38,19 +39,8 @@ public class CrackingEngine {
     }
 
     // Handles the fixed O(U) complexity lookup (High-Performance Concurrency)
-<<<<<<< HEAD
-    public void startAttack(ExecutorService executor) {
-        final int BATCH_SIZE = 1000; // Define the desired batch size
-
-        for (User user : users.values()) {
-            executor.submit(() -> {
-                try {
-                    // O(1) Lookup: Efficient lookup replaces the nested loop.
-                    String crackedPassword = preHashedDictionary.get(user.hashedPassword());
-=======
     public void startAttack() {
         final int BATCH_SIZE = 1000; 
->>>>>>> parent of 5b86202 (Revert "Merge branch 'test' of https://github.com/BenjaminLohDW/APD-Project-Group5 into test")
 
         users.values().parallelStream().forEach(user -> {
             try {
@@ -65,18 +55,6 @@ public class CrackingEngine {
                         ));
                         passwordsFound.incrementAndGet();
                     }
-<<<<<<< HEAD
-                } finally {
-                    int done = usersChecked.incrementAndGet();
-
-                    // NEW BATCH REPORTING LOGIC:
-                    // If the number of checked users is a multiple of the batch size,
-                    // or if it's the very last task, manually trigger a report.
-                    if (done % BATCH_SIZE == 0 || done == totalUsers) {
-                        reporter.reportNow();
-                    }
-=======
->>>>>>> parent of 5b86202 (Revert "Merge branch 'test' of https://github.com/BenjaminLohDW/APD-Project-Group5 into test")
                 }
             } finally {
                 int done = usersChecked.incrementAndGet();
