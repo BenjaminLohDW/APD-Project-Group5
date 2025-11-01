@@ -62,17 +62,22 @@ public class StatusReporter {
             if (currentCount > lastReportedMilestone) {
                 lastReportedMilestone = currentCount;
                 doReport(currentCount);
+                // Move cursor to next line after a manual/forced report
+                System.out.println();
             }
         }
     }
 
-    // Extracted the printing logic into a reusable method
+    // Extracted the printing logic into a reusable method.
+    // Matches the old `DictionaryAttack` formatting: carriage-return in-place update
     private void doReport(long milestone) {
         long remaining = totalTasks - milestone;
         double percent = totalTasks == 0 ? 100.0 : (double) milestone / totalTasks * 100.0;
         String timestamp = LocalDateTime.now().format(formatter);
-        
-        System.out.printf("[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d%n",
+
+        // Print with carriage return so the same console line is updated.
+        System.out.printf("\r[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d",
                 timestamp, percent, passwordsFound.get(), remaining);
+        System.out.flush();
     }
 }
