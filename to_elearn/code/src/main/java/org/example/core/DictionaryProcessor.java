@@ -23,20 +23,25 @@ public class DictionaryProcessor {
     }
 
     // Handles the fixed O(D) complexity pre-hashing (The algorithmic fix [cite: 42, 43])
+    // Using sequential processing to avoid thread contention on ConcurrentHashMap writes
     public ConcurrentHashMap<String, String> preHashDictionary(
             List<String> dictionaryWords) {
 
-        ConcurrentHashMap<String, String> preHashedDictionary = new ConcurrentHashMap<>();
+        // Pre-size the map to avoid resizing overhead
+        ConcurrentHashMap<String, String> preHashedDictionary = 
+            new ConcurrentHashMap<>((int)(dictionaryWords.size() / 0.75) + 1);
         
-        System.out.println("Starting parallel pre-hashing...");
+        // System.out.println("Starting sequential pre-hashing (optimized for memory bandwidth)...");
         
-        dictionaryWords.parallelStream().forEach(word -> {
+        // Sequential processing is faster for write-heavy operations
+        // Avoids ConcurrentHashMap contention and cache line bouncing
+        for (String word : dictionaryWords) {
             String hash = Hasher.sha256(word);
-            // Hash -> Plaintext mapping. putIfAbsent is thread-safe.
+            // Hash -> Plaintext mapping
             preHashedDictionary.putIfAbsent(hash, word);
             // Use the shared counter
             hashesComputed.increment();
-        });
+        }
 
         return preHashedDictionary;
     }

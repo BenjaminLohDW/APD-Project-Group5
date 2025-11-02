@@ -12,7 +12,6 @@ import org.example.report.StatusReporter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ForkJoinPool;
@@ -48,7 +47,7 @@ public class App {
         long startTime = System.currentTimeMillis();
 
         // --- 2. DATA LOADING (Target Hash Loading/Management Component) ---
-        long startTime2 = System.currentTimeMillis();
+        // long startTime2 = System.currentTimeMillis();
 
         HashManager hashManager = new HashManager();
         Map<String, User> users = hashManager.loadUsers(usersPath);
@@ -56,42 +55,39 @@ public class App {
         DictionaryProcessor dictionaryProcessor = new DictionaryProcessor(hashesComputed);
         List<String> dictionaryWords = dictionaryProcessor.loadDictionary(dictionaryPath);
 
-        System.out.println("Using custom ForkJoinPool with " + THREAD_COUNT + " threads.");
-        ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT);
-
         ConcurrentHashMap<String, String> preHashedDictionary;
-        System.out.println("time loading data (milliseconds): " + (System.currentTimeMillis() - startTime2));
+        // System.out.println("time loading data (milliseconds): " + (System.currentTimeMillis() - startTime2));
 
-        // --- 3. PRE-HASHING  ---
+        // --- 3. PRE-HASHING (Sequential for optimal performance) ---
         
-        long startTime3 = System.currentTimeMillis();
+        // long startTime3 = System.currentTimeMillis();
 
-        Callable<ConcurrentHashMap<String, String>> preHashTask = 
-            () -> dictionaryProcessor.preHashDictionary(dictionaryWords);
-                    
-        // .get() blocks until the hashing is complete
-        preHashedDictionary = customPool.submit(preHashTask).get();
-        System.out.println("time pre-hashing dictionary (milliseconds): " + (System.currentTimeMillis() - startTime3));
-                
+        // Pre-hashing runs sequentially on main thread - faster due to no thread contention
+        preHashedDictionary = dictionaryProcessor.preHashDictionary(dictionaryWords);
+        // System.out.println("time pre-hashing dictionary (milliseconds): " + (System.currentTimeMillis() - startTime3));
+        
+        
+        // Create custom pool AFTER pre-hashing for the cracking phase
+        System.out.println("Starting attack with custom ForkJoinPool (" + THREAD_COUNT + " threads)...");
+        
         // --- 4. LIVE STATUS REPORTING ---
         long totalUsers = users.size();
         StatusReporter reporter = new StatusReporter(totalUsers, passwordsFound, usersChecked);
         
 
         // --- 5. CRACKING (Core Concurrent Cracking Engine) ---
-        CrackingEngine crackingEngine = new CrackingEngine(
-                users,
-                preHashedDictionary,
-                passwordsFound,
-                usersChecked,
-                crackedQueue,
-                reporter,
-                totalUsers   
-        );
-        customPool.submit(() -> crackingEngine.startAttack()).get();
-        customPool.shutdownNow();
-
-        System.out.println("\n\nAttack complete.");
+        try (ForkJoinPool customPool = new ForkJoinPool(THREAD_COUNT)) {
+            CrackingEngine crackingEngine = new CrackingEngine(
+                    users,
+                    preHashedDictionary,
+                    passwordsFound,
+                    usersChecked,
+                    crackedQueue,
+                    reporter,
+                    totalUsers   
+            );
+            customPool.submit(() -> crackingEngine.startAttack()).get();
+        }        System.out.println("\n\nAttack complete.");
         System.out.println("Total passwords found: " + passwordsFound.get());
     System.out.println("Total dictionary hashes computed: " + hashesComputed.sum());
         System.out.println("Total time spent (milliseconds): " + (System.currentTimeMillis() - startTime));

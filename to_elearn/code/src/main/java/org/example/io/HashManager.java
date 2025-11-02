@@ -15,12 +15,16 @@ public class HashManager {
     // Using Streams API to load and transform data concisely 
     public Map<String, User> loadUsers(String filename) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(filename));
+        // Pre-size the map to avoid resizing
+        int expectedSize = (int)(lines.size() / 0.75) + 1;
         return lines.stream()
                 .map(line -> line.split(","))
                 .filter(parts -> parts.length >= 2)
-                .collect(Collectors.toConcurrentMap(
+                .collect(Collectors.toMap(
                         parts -> parts[0], 
-                        parts -> new User(parts[0], parts[1].trim())
+                        parts -> new User(parts[0], parts[1].trim()),
+                        (existing, replacement) -> existing,
+                        () -> new java.util.concurrent.ConcurrentHashMap<>(expectedSize)
                 ));
     }
 }
