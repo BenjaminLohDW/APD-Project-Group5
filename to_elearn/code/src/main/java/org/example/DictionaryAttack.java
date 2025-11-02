@@ -4,20 +4,15 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import org.example.util.Hasher;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -38,7 +33,7 @@ public class DictionaryAttack {
 
     static AtomicInteger passwordsFound = new AtomicInteger(0);
     // Renamed for clarity: tracks dictionary hashes computed during pre-hashing
-    static AtomicInteger hashesComputed = new AtomicInteger(0); 
+    static java.util.concurrent.atomic.LongAdder hashesComputed = new java.util.concurrent.atomic.LongAdder(); 
     // New: Tracks the number of users checked against the dictionary
     static AtomicInteger usersChecked = new AtomicInteger(0); 
 
@@ -46,8 +41,8 @@ public class DictionaryAttack {
 
         // ========== DATASET CONFIGURATION ==========
         // Run from 'target' directory:
-        String datasetPath = "../../datasets/small/";  // Use small dataset
-        // String datasetPath = "../../datasets/large/";  // Use large dataset
+        // String datasetPath = "../../datasets/small/";  // Use small dataset
+        String datasetPath = "../../datasets/large/";  // Use large dataset
         
         // ==========================================
 
@@ -59,90 +54,75 @@ public class DictionaryAttack {
         List<String> allDictionaryWords = loadDictionary(dictionaryPath);
         loadUsers(usersPath);
         
-        // Determine thread count (allow override from args)
-        int threadCount = Runtime.getRuntime().availableProcessors();
-        if (args.length >= 1) {
-            try {
-                int t = Integer.parseInt(args[0]);
-                if (t > 0) threadCount = t;
-            } catch (NumberFormatException ignored) {
-            }
-        }
+        // Optional: override parallelism via JVM flags or ForkJoin settings if needed
 
-        // Executor service for pre-hashing and user checking
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        
-        // --- STEP 1: PARALLEL PRE-HASHING ---
-        // This is the largest performance change. We hash the dictionary once.
+        // --- STEP 1: PARALLEL PRE-HASHING (blocking) ---
         long totalHashingTasks = allDictionaryWords.size();
-        System.out.println("Starting parallel pre-hashing of " + totalHashingTasks + " dictionary words using " + threadCount + " threads...");
-        
-        preHashDictionary(allDictionaryWords, executor);
-        // Hashing is complete, now the executor is ready for the attack tasks.
-        
-        
-        // --- STEP 2: PARALLEL DICTIONARY ATTACK (Lookup) ---
+        System.out.println("Starting parallel pre-hashing of " + totalHashingTasks + " dictionary words using parallel streams...");
+
+        // Use the fast ThreadLocal Hasher and parallelStream to fully complete pre-hashing before lookups
+        allDictionaryWords.parallelStream().forEach(word -> {
+            String hash = Hasher.sha256(word);
+            preHashedDictionary.putIfAbsent(hash, word);
+            hashesComputed.increment();
+        });
+
+        // --- STEP 2: PARALLEL LOOKUP (one lookup per user) ---
         long totalUsers = users.size();
-        long totalTasks = totalUsers; // Total tasks is now just the number of users
-        System.out.println("\nStarting attack (lookup) on " + totalUsers + " users...");
+        long totalTasks = totalUsers;
+        System.out.println("\nStarting attack (lookup) on " + totalUsers + " users using parallel streams...");
 
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-
-        // Periodic progress reporter (adapted for the new model)
+        // Periodic progress reporter
         Runnable reporter = () -> {
-            long remaining = totalTasks - usersChecked.get();
-            double percent = totalTasks == 0 ? 100.0 : (double) usersChecked.get() / totalTasks * 100.0;
+            long checked = usersChecked.get();
+            long remaining = Math.max(0, totalTasks - checked);
+            double percent = totalTasks == 0 ? 100.0 : (double) checked / totalTasks * 100.0;
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             String timestamp = LocalDateTime.now().format(formatter);
             System.out.printf("\r[%s] %.2f%% complete | Passwords Found: %d | Users Remaining: %d",
                     timestamp, percent, passwordsFound.get(), remaining);
         };
-        scheduler.scheduleAtFixedRate(reporter, 1, 1, TimeUnit.SECONDS);
 
-        // Submit tasks to the executor (one task per user)
-        for (User user : users.values()) {
-            executor.submit(() -> {
-                try {
-                    // O(1) Lookup: Check if the user's hash exists as a key in the pre-hashed map
-                    String crackedPassword = preHashedDictionary.get(user.hashedPassword);
+        // Start a simple background reporter thread
+        Thread reporterThread = new Thread(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted() && usersChecked.get() < totalTasks) {
+                    reporter.run();
+                    TimeUnit.SECONDS.sleep(1);
+                }
+            } catch (InterruptedException ignored) {
+                // exit
+            }
+        }, "status-reporter");
+        reporterThread.setDaemon(true);
+        reporterThread.start();
 
-                    if (crackedPassword != null) {
-                        // ensure only one thread marks the user as found
-                        synchronized (user) {
-                            if (!user.isFound) {
-                                cracked.add(user.username + ": " + crackedPassword);
-                                user.isFound = true;
-                                user.foundPassword = crackedPassword;
-                                passwordsFound.incrementAndGet();
-                            }
+        // Perform lookups in parallel using the common ForkJoinPool
+        users.values().parallelStream().forEach(user -> {
+            try {
+                String crackedPassword = preHashedDictionary.get(user.hashedPassword);
+                if (crackedPassword != null) {
+                    synchronized (user) {
+                        if (!user.isFound) {
+                            cracked.add(user.username + ": " + crackedPassword);
+                            user.isFound = true;
+                            user.foundPassword = crackedPassword;
+                            passwordsFound.incrementAndGet();
                         }
                     }
-
-                } finally {
-                    int done = usersChecked.incrementAndGet();
-                    // Print progress for large batches to reduce spamming
-                    if (done % 100 == 0 || done == totalTasks) {
-                        reporter.run();
-                    }
                 }
-            });
-        }
-
-        executor.shutdown();
-        try {
-            // Wait up to an hour; adjust as needed
-            if (!executor.awaitTermination(1, TimeUnit.HOURS)) {
-                System.err.println("Warning: tasks did not finish within timeout");
+            } finally {
+                usersChecked.incrementAndGet();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        });
 
-        scheduler.shutdownNow();
+        // stop reporter and show final progress
+        reporterThread.interrupt();
+        reporter.run();
         System.out.println("");
         System.out.println("");
         System.out.println("Total passwords found: " + passwordsFound.get());
-        System.out.println("Total dictionary hashes computed: " + hashesComputed.get());
+    System.out.println("Total dictionary hashes computed: " + hashesComputed.sum());
         System.out.println("Total time spent (milliseconds): " + (System.currentTimeMillis() - start));
 
         if (passwordsFound.get() > 0) {
@@ -154,38 +134,7 @@ public class DictionaryAttack {
      * Parallel pre-hashing of the dictionary words.
      * Maps the SHA-256 hash to the plaintext password for quick lookup later.
      */
-    static void preHashDictionary(List<String> dictionaryWords, ExecutorService executor) {
-        AtomicInteger completedHashing = new AtomicInteger(0);
-        long totalHashingTasks = dictionaryWords.size();
-        
-        for (String word : dictionaryWords) {
-            executor.submit(() -> {
-                try {
-                    String hash = sha256(word);
-                    // Hash -> Plaintext mapping. Only store the first instance for unique hashes.
-                    preHashedDictionary.putIfAbsent(hash, word);
-                    hashesComputed.incrementAndGet();
-                } catch (NoSuchAlgorithmException ignored) {
-                } finally {
-                    int done = completedHashing.incrementAndGet();
-                    // Basic progress report for pre-hashing
-                    if (done % 10000 == 0 || done == totalHashingTasks) {
-                        double percent = (double) done / totalHashingTasks * 100.0;
-                        System.out.printf("\rPre-hashing: %.2f%% complete (Hashes: %d)", percent, hashesComputed.get());
-                    }
-                }
-            });
-        }
-
-        // We temporarily shutdown and await termination for the pre-hashing phase
-        // Then re-initialize the executor for the main attack if needed, 
-        // but since we want to reuse the same executor for both for simplicity:
-        
-        // Use a dedicated temporary executor for pre-hashing and wait on it.
-        // NOTE: If you pass the main 'executor' here, you need to manage its lifecycle carefully.
-        // For simplicity, we submit all hashing tasks, then all user tasks, and shut down once.
-        // Awaiting termination is handled below for the main executor.
-    }
+    
 
 
     /**
@@ -236,15 +185,7 @@ public class DictionaryAttack {
         }
     }
 
-    static String sha256(String input) throws NoSuchAlgorithmException {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-        StringBuilder hex = new StringBuilder();
-        for (byte b : hash) {
-            hex.append(String.format("%02x", b));
-        }
-        return hex.toString();
-    }
+    
 
     // CrackTask class is removed as it's no longer necessary with the pre-hashing strategy.
 
